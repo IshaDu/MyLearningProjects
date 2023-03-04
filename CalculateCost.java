@@ -6,7 +6,7 @@ import java.awt.event.ActionListener;
 import javax.swing.*;
 
 public class CalculateCost {
-
+// Simple java swing application to calculate trip cost
 	public static void main(String[] args) {
 		JFrame calulateCostFrame=new JFrame("Calculate Cost"); 
 		calulateCostFrame.setSize(500,350);  
