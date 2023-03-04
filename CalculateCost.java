@@ -70,6 +70,7 @@ public class CalculateCost {
 		calulateCostFrame.add(tripCostLabel);
 		calulateCostFrame.add(tripCostTextField);
 		
+		//Action performed on click of clear button
 		clearButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -80,6 +81,7 @@ public class CalculateCost {
 			}
 		});
 		
+		//Action performed on click of calculate button
 		calculateButton.addActionListener(new ActionListener() {
 			
 			@Override
@@ -100,7 +102,14 @@ public class CalculateCost {
 				tripCostTextField.setText(tripCostValue);
 			}
 		});
-		
+		//Action performed on the click of close button
+		closeButton.addActionListener(new ActionListener() {
+			
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				calulateCostFrame.dispose();
+			}
+		});
 		
 	}
 
