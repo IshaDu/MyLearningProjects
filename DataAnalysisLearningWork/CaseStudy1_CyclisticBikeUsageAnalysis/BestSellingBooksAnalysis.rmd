@@ -1,0 +1,195 @@
+---
+title: "Analysis of Top 50 Best Selling Books on the basis of Genre (YEAR 2009 TO 2019)"
+author: "Isha Dubey"
+date: "3/25/2022"
+output: html_document
+---
+```{r include=FALSE,echo=FALSE,error=FALSE,}
+#importing packages and loading them
+
+#install.packages("tidyverse")
+#install.packages("lubridate")
+#install.packages("dplyr")
+#install.packages("ggplot2")
+#install.packages("sqldf")
+#install.packages("tidyr")
+
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(sqldf)
+library(rmarkdown)
+library(tidyr)
+
+getwd()
+setwd("C:\\Users\\ishad\\Documents\\Isha\\RCaseStudy\\RCaseStudy3\\AmazonBestSellingBooks")
+
+#reading book sellers csv into a dataframe
+bookSeller <- read.csv("bestsellers with categories.csv")
+#View(bookSeller)
+
+#colnames(bookSeller)
+#str(bookSeller)
+
+#adding columns to bookSeller
+#Year1 to use it for graph
+bookSeller <- mutate(bookSeller,Year1=as.character(bookSeller$Year))
+#user_rating to use it in sql queries
+bookSeller <- mutate(bookSeller,user_rating=bookSeller$User.Rating)
+
+
+#-------------------------------Analyizing Data ------------------
+#FInding max user rating
+max_rating <- max(bookSeller$User.Rating)
+print(max_rating)
+#FInding min user rating
+min_rating <- min(bookSeller$User.Rating)
+print(min_rating)
+#Storing various rating from 2009 to 2019 for the books
+user_rating_values <- sqldf("select distinct user_rating from bookSeller")
+#print(user_rating_values)
+
+user_rating_values <- sort(user_rating_values$user_rating,decreasing=TRUE)
+#print(user_rating_values)
+```
+## =================================================
+
+### **NUMBER OF BOOKS BASED ON GENRE FROM YEAR 2009 TO 2019**
+
+
+```{r echo=FALSE,error=FALSE}
+#===============================================================
+#counting Number of books on the basis of Genre out of top 50 best selling book through year 2009 to 2019
+Genre_Count_Book <- count(bookSeller,Genre)
+colnames(Genre_Count_Book)<- c("Genre","No_of_Books")
+#View(Genre_Count_Book)
+ggplot(Genre_Count_Book)+
+  geom_col(mapping = aes(x=Genre,y = No_of_Books,fill=No_of_Books))+
+  labs(title = "Count of books on the basis of Genre",
+       subtitle = "Year 2009 to 2019",x="Genre",y="Number of Books" ,caption = "( Graph 1 )")
+
+#===================================================================
+```
+
+##### **CONCLUSION**
+- Number of Fiction Books are less as compared to Non-Fiction Books.
+
+## =================================================
+
+### **COUNTING NUMBER OF BOOKS EACH YEAR FROM 2009 TO 2019 BASED ON GENRE** 
+
+```{r echo=FALSE}
+#Observing Number of books on the basis of Genre per year
+Count_Genre_PerYear <- count(bookSeller,Genre,Year1) 
+colnames(Count_Genre_PerYear)<- c("Genre","Year1","No_of_Books")
+#View(Count_Genre_PerYear)
+
+ggplot(Count_Genre_PerYear)+
+  geom_col(mapping = aes(x=Year1,y=No_of_Books,fill=Genre))+
+  labs(title = "Number of books on the basis of Genre per year",
+       subtitle = "Year 2009 to 2019", x="Year ->",y="Number of Books ->",caption = "( Graph 2 )")
+
+#===================================================================
+```
+
+##### **CONCLUSION**
+- Number of Non-fiction books is more as compared to the fiction books except year 2014.
+
+
+## =================================================
+
+### **FINDING TOP TEN AUTHORS FROM YEAR 2009 TO 2019 AND OBSERVING THEM BASED ON GENRE**
+
+```{r echo=FALSE}
+TopTenPopularAuthor09To19 <- sqldf("select Author,count(Author)booksWritten,Genre
+                                 from bookSeller 
+                                 group by Author
+                                 order by booksWritten desc 
+                                 limit 10")
+
+#View(TopTenPopularAuthor09To19)
+
+ggplot(TopTenPopularAuthor09To19)+
+  geom_col(mapping = aes(x=Author,y=booksWritten,fill=Genre))+
+  labs(title="Top 10 Authors on basis of Count of Books Written",
+       subtitle = "From Year 2009 To 2019",y="Count of Books Written->", x="Author Name ->",caption = "( Graph 3 )")+
+  theme(axis.text.x = element_text(angle=90))
+
+#===================================================================
+```
+
+##### **CONCLUSION**
+- Number of Fiction writer are more as compared to Non-fiction writers
+
+
+## =================================================
+
+### **FINDING FAVORITE SERIES FROM YEAR 2009 TO 2019**
+
+```{r echo=FALSE ,error=FALSE,warning=FALSE}
+
+#FINDING FAVORITE SERIES FROM YEAR 2009 TO 2019
+bookSeller1 <- separate(bookSeller,Name,c("Name2"),":",convert = FALSE)
+#View(bookSeller1)
+
+Longest_series <- count(bookSeller1,Name2,Genre,user_rating,sort = TRUE)
+colnames(Longest_series)<-c("Name","Genre","user_rating","No_of_Books")
+#View(Longest_series)
+
+FavoriteLongestSeries <-
+  sqldf("select * from Longest_series 
+        where user_rating=4.9 AND No_of_Books>4")
+#View(FavoriteLongestSeries)
+
+ggplot(FavoriteLongestSeries)+
+  geom_col(mapping = aes(x=Name,y=No_of_Books,fill=Genre))+
+  labs(title="Longest favorite Book Series",subtitle = "From Year     2009 to 2019", x="Name of the book series ->", y="Number of    Books ->" ,caption = "( Graph 4 )")+
+  theme(axis.text.x=element_text(angle=90))
+```
+
+##### **CONCLUSION**
+- Longest and Favorite books series are fictional.
+
+## =================================================
+
+### **FINDING THE BEST BOOK OF THE YEAR FROM YEAR 2009 TO 2019**
+
+
+```{r echo=FALSE,,warning=FALSE,fig.width=8,fig.height=10}
+
+#===================================================================
+
+#Finding the best book the Year from 2009 to 2019
+BestBook2009To2019 <- sqldf("select * from bookSeller 
+           where user_rating>4.7
+           group by Year1
+           order by Year1")
+#View(BestBook2009To2019)
+
+
+ggplot(BestBook2009To2019)+
+  geom_col(mapping = aes(x=Reviews,y=Name,fill=Year1,color=Genre))+
+  labs(title="Best book of the year (User Rating > 4.7)",subtitle = "From year 2009 to 2019", x="Year ->",y="Name of the Book ->" ,caption = "( Graph 5    )")+
+  theme(axis.text.x=element_text(angle=90),legend.position = "bottom",legend.box = "vertical")+
+  scale_y_discrete(labels=label_wrap_gen(width = 25,multi_line = TRUE))+
+  annotate("text", x =22000, y = 6,
+                     label = "Non-Fiction")
+#===================================================================
+
+
+```
+
+##### **CONCLUSION**
+- All the years have Fiction Books as the Best book of the year except the Book "Jesus Calling:Enjoying Peace in his Presence(With Scriptures References)" in Year 2011 which is Non-Fiction.
+
+
+## =================================================
+
+#### **FINAL CONCLUSION FROM ALL THE GRAPHS**
+- Though the number of non-fiction books are more in top 50 best selling books, but the fiction books leads the non-fiction books.
+
+## =================================================
+
+
+\

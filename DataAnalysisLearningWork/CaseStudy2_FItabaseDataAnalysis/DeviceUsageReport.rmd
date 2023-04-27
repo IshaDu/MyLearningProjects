@@ -1,0 +1,466 @@
+---
+title: "Smart Device Usage Analysis For Bellabeat"
+author: "Isha Dubey"
+date: "3/21/2022"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r include=FALSE,echo=FALSE,error=FALSE}
+#importing packages and loading them
+#install.packages("tidyverse")
+#install.packages("lubridate")
+#install.packages("writexl")
+#install.packages("xlsx")
+#install.packages("dplyr")
+#install.packages("xlsx")
+#install.packages("ggplot2")
+#install.packages("sqldf")
+#install.packages("rmarkdown")
+
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library(lubridate)
+library(writexl)
+library(dplyr)
+library(ggplot2)
+library(sqldf)
+library(rmarkdown)
+library(tinytex)
+#============================importing files=======================================
+getwd()
+setwd("C:\\Users\\ishad\\Documents\\Isha\\RCaseStudy\\RCaseStudy2\\FitabaseData")
+#------------------------------------------------------------------------------------
+dailyActivity <- 
+  read.csv("C:\\Users\\ishad\\Documents\\Isha\\RCaseStudy\\RCaseStudy2\\FitabaseData\\dailyActivity_merged.csv")
+#View(dailyActivity)
+
+sleepDay <-
+  read.csv("C:\\Users\\ishad\\Documents\\Isha\\RCaseStudy\\RCaseStudy2\\FitabaseData\\sleepDay_merged.csv")
+#View(sleepDay)
+
+heartRateSec <-
+  read.csv("C:\\Users\\ishad\\Documents\\Isha\\RCaseStudy\\RCaseStudy2\\FitabaseData\\heartrate_seconds_merged.csv")
+#View(heartRateSec)
+
+weightLog <- 
+  read.csv("C:\\Users\\ishad\\Documents\\Isha\\RCaseStudy\\RCaseStudy2\\FitabaseData\\weightLogInfo_merged.csv")
+#View(weightLog)
+
+#================================ORGANISING DATA===================================
+#STEP 1
+# adding columns AvgDistance and AvgActiveM into dailyActivity data frame 
+# adding column DateOfActivity_YMD, extracted from the ActivityDate 
+actDate <- parse_date_time(dailyActivity$ActivityDate, "m/d/Y")
+
+dailyActivity2 <- 
+mutate(dailyActivity,
+       AvgDistance=(VeryActiveDistance+ModeratelyActiveDistance+
+                    LightActiveDistance+SedentaryActiveDistance)/4,
+       AvgActiveMin=(VeryActiveMinutes+FairlyActiveMinutes+
+                      LightlyActiveMinutes)/3,
+       DateOfActivity_YMD = as.Date(actDate,format="%Y/%m/%d")
+      )
+
+# changing type of Id to character from numeric (to use for color attribute in ggplot)
+class(dailyActivity2$Id)="character"
+
+str(dailyActivity2)
+
+#STEP 2
+#adding columns sleep_Date and Sleep_Time to sleepDay data frame extracted from sleepDay column 
+SlpTime = parse_date_time(sleepDay$SleepDay, "m/d/Y I:M:S p")
+sleepDay2 <- 
+mutate(sleepDay,sleep_Date = as.Date(SlpTime,format = "%Y/%m/%d" ),
+Sleep_Time =format(SlpTime,format = "%H:%M:%S") )
+
+
+#changing type of Id to character from numeric (to use for color attribute in ggplot)
+class(sleepDay2$Id)="character"
+
+str(sleepDay2)
+
+#STEP 3
+# MERGING DATA FRAMES OF dailyActivity AND sleepDay to see relation between Activity and Sleep
+MergeActivitySleep <- 
+sqldf("select d.Id, d.TotalSteps,d.TotalDistance,
+      d.TrackerDistance,d.LoggedActivitiesDistance,
+      d.SedentaryMinutes,d.Calories,d.AvgDistance,
+      d.AvgActiveMin,d.DateOfActivity_YMD,s.sleep_Date,
+      s.Sleep_Time,s.TotalSleepRecords,s.TotalMinutesAsleep,
+      s.TotalTimeInBed
+      from dailyActivity2 d
+      inner join sleepDay2 s
+      on d.Id = s.Id
+      where d.DateOfActivity_YMD == s.sleep_Date
+      ")
+#View(MergeActivitySleep)
+
+#STEP 4
+# adding columns to heartRateSec data frame heartRateDate_YMD and heartRateTime from column Time 
+SleepTime = parse_date_time(heartRateSec$Time, "m/d/Y I:M:S p")
+heartRateSec1 <- mutate(heartRateSec, heartRateDate_YMD =  as.Date(SleepTime,format = "%Y/%m/%d"),heartRateTime =format(SleepTime,format = "%H:%M:%S")  )
+
+# changing data type of id to character from numeric
+class(heartRateSec1$Id)="character"
+
+str(heartRateSec1)
+
+#STEP 5
+# CERATING heart rate summary data frame by finding average/max/min heartrates for each user
+heartRateSmry <- 
+  sqldf("select Id,heartRateDate_YMD,count(Id) as HeartRateReadingCount, 
+      avg(Value) as AverageHeartRate,
+      max(Value) as MaxHeartRate,min(Value) as MinHeartRate 
+      from heartRateSec1 
+      group by Id, heartRateDate_YMD")
+#View(heartRateSmry)
+colnames(heartRateSmry)
+#colnames(MergeActivitySleep)
+
+#STEP 6
+# MERGING DATA FRAME FOR "dailyActivity and sleep" with heartratesec data frame
+MergeActivitySleepHeartRate <-
+  sqldf("select MergeActivitySleep.*,
+        m.heartRateDate_YMD,m.HeartRateReadingCount,
+        m.AverageHeartRate,m.MaxHeartRate,m.MinHeartRate
+        from MergeActivitySleep
+        inner join heartRateSmry m
+        on MergeActivitySleep.Id = m.Id
+        where MergeActivitySleep.DateOfActivity_YMD == m.heartRateDate_YMD
+      ")
+#View(MergeActivitySleepHeartRate)
+str(MergeActivitySleepHeartRate)
+
+#STEP 7
+#changing data type of id and log id to character from numeric 
+class(weightLog$Id)="character"
+class(weightLog$LogId)="character"
+
+#adding columns to weightLog data frame
+wtLogTime = parse_date_time(weightLog$Date, "m/d/Y I:M:S p")
+weightLog2 <- 
+  mutate(weightLog,WeightLogDate_YMD = as.Date(wtLogTime,format = "%Y/%m/%d" ),
+         WeightLogTime =format(wtLogTime,format = "%H:%M:%S") )
+#View(weightLog2)
+colnames(weightLog2)
+
+#MERGING DATA FROM MergeActivitySleepHeartRate AND weightLog2
+MergeActivitySleepHeartRateWeight <-
+  sqldf("select MergeActivitySleepHeartRate.*,
+    w.WeightKg,w.WeightPounds,w.BMI,w.IsManualReport,w.LogId,
+    w.WeightLogDate_YMD,w.WeightLogTime
+    from MergeActivitySleepHeartRate
+    inner join weightLog2 w
+    on MergeActivitySleepHeartRate.Id = w.Id
+    where MergeActivitySleepHeartRate.DateOfActivity_YMD == w.WeightLogDate_YMD")
+
+#View(MergeActivitySleepHeartRateWeight)
+str(MergeActivitySleepHeartRateWeight)
+
+```
+
+## -----------------------------------------------------------------------------------------
+
+### RELATION B/W THE STEPS AND DISTANCE TRACKED BY THE DEVICE
+
+```{r echo=FALSE}
+#======================== CREATING VISUALIZATIONS ===================================
+
+#RELATION BETWEEN TOTOL STEPS AND DISTANCE INTENSITIES
+  #1 relation between steps and TrackerDistance
+ggplot(dailyActivity2)+
+  geom_point(mapping = aes(x=TotalSteps,y=TrackerDistance,color=Id))+
+  labs(title="Relation b/w Total Steps Taken in a day and Tracked Distance by the device",x="Total Steps ->", y="Distance Tracked by the device ->",caption = "(Graph 1)")
+  #2 relation between steps and Total Distance
+ggplot(dailyActivity2)+
+  geom_point(mapping = aes(x=TotalSteps,y=TotalDistance,color=Id))+
+  labs(title="Relation b/w Total Steps taken in a day and Total Distance convered in a day", x="TotalSteps", y="TotalDistance",caption = "(Graph 2)")
+  #3 relation between steps and average distance 
+ggplot(dailyActivity2)+
+  geom_point(mapping = aes(x=TotalSteps,y=AvgDistance,color=Id))+
+  labs(title="Relation b/w Total Steps taken in a day and Average Distance convered in a day",x="TotalSteps ->",y="AvgDistance->",caption="(Graph 3)")
+
+
+##====================================================================================
+
+```
+
+
+#### **CONCLUSION FROM GRAPH 1, GRAPH 2 AND GRAPH 3**
+- The Relationship between steps and distance is linear.
+- Distance is increasing with the steps.
+- The Average disance is the average of the following distances : 
+  * Very Active
+  * Moderately Active
+  * Lightly Active
+
+
+## -----------------------------------------------------------------------------------------
+
+### RELATION BETWEEN THE STEPS TAKEN AND CALORIES BURNT
+  
+```{r echo=FALSE}
+
+#RELATION BETWEEN TOTAL STEPS AND CALORIES
+ggplot(dailyActivity2)+
+  geom_point(mapping = aes(x=TotalSteps,y=Calories,color=Id))+
+  labs(title = "Relation b/w TotalSteps and Calories burnt",caption = "(Graph 4)")
+##====================================================================================
+```
+
+#### **CONCLUSION FROM GRAPH 4**
+- The Relationship between steps and calories shows the increasing trend.
+- More calories are burnt as the steps increase.
+
+## -----------------------------------------------------------------------------------------
+
+### RELATION BETWEEN THE STEPS TAKEN AND ACTIVITY MINUTES
+
+```{r echo=FALSE}
+#RELATION BETWEEN TOTAL STEPS AND ACTIVITY MINUTES
+  #1 Active minutes
+ggplot(dailyActivity2)+
+  geom_point(mapping = aes(x=TotalSteps,y=AvgActiveMin,color=Id))+
+  labs(title = "Relation b/w TotalSteps and Average Activity Minutes",x="Total Steps taken ->",y="Average Activity Minutes ->",caption = "(Graph 5)")
+  #2 Sedentary minutes
+ggplot(dailyActivity2)+
+  geom_point(mapping = aes(x=TotalSteps,y=SedentaryMinutes,color=Id))+
+  labs(title = "Relation b/w TotalSteps and Sedentary Minutes",caption = "(Graph 6)")
+#====================================================================================
+```
+
+#### **CONCLUSION FROM GRAPH 5**
+- The Relationship between steps and Average Activity minutes shows the increasing trend.
+- More steps are counted as the activity minutes are increased.
+- Average Activity minutes is the average of the following:
+  * VeryActiveMinutes 
+  * FairlyActiveMinutes 
+  * LightlyActiveMinutes
+
+#### **CONCLUSION FROM GRAPH 6**
+- The Steps and Sedentary Minutes seems to have decreasing trend relation.
+
+## -----------------------------------------------------------------------------------------
+### RELATION BETWEEN THE AVERAGE ACTIVITY MINUTES AND AVERAGE DISTANCE INTENSITY
+
+```{r echo=FALSE}
+#RELATION BETWEEN AVERAGE ACTIVITY MINUTES AND AVERAGE DISTANCE INTENSITY
+ggplot(dailyActivity2)+
+  geom_point(mapping = aes(x=AvgActiveMin,y=AvgDistance,color=Id))+
+  labs(title = "Relation b/w Average Activity Minutes and Average Distance",caption = "(Graph 7)")
+```
+
+#### **CONCLUSION FROM GRAPH 7**
+- The Graph shows the increasing trend.
+- It concludes that the more is the distance covered more is the activity done.
+
+## -----------------------------------------------------------------------------------------
+### RELATION BETWEEN THE CALORIES BURNT AND SLEEP
+
+```{r echo=FALSE}
+#RELATION BETWEEN CALORIES AND SLEEP
+ggplot(MergeActivitySleep)+
+  geom_point(mapping = aes(x=Calories,y=TotalMinutesAsleep,color=Id))+
+  labs(title = "Relation b/w Calories burnt and Total sleeping minutes",caption = "(Graph 8)")
+#========================================================================================
+
+```
+
+#### **CONCLUSION FROM GRAPH 8**
+- The Graph shows the scattered trend.
+- To identify the actual trend individual user has to be identified.
+
+## -----------------------------------------------------------------------------------------
+### RELATION BETWEEN THE TOTAL STEPS AND SLEEP
+
+```{r echo=FALSE}
+#RELATION BETWEEN TOTAL STEPS AND SLEEP
+ggplot(MergeActivitySleep)+
+  geom_point(mapping = aes(x=TotalSteps,y=TotalMinutesAsleep,color=Id))+
+  labs(title = "Relation b/w TotalSteps and Total sleeping minutes",caption = "(Graph 9)")
+
+#RELATION BETWEEN AVERAGE DISTANCE INTENSITIES  AND SLEEP
+ggplot(MergeActivitySleep)+
+  geom_point(mapping = aes(x=AvgDistance,y=TotalMinutesAsleep,color=Id))+
+  labs(title = "Relation b/w Average distance intensities and Total sleeping minutes", caption = "(Graph 10)")
+
+#RELATION BETWEEN AVERAGE ACTIVITY MINUTES AND SLEEP
+ggplot(MergeActivitySleep)+
+  geom_point(mapping = aes(x=AvgActiveMin,y=TotalMinutesAsleep,color=Id))+
+  labs(title = "Relation b/w Average active minutes and Total sleeping minutes", caption = "(Graph 11)")
+
+```
+
+#### **CONCLUSION FROM GRAPH 9, GRAPH 10 AND GRAPH 11**
+- The Relationship between Distance and sleep is scattered.
+- Trend for an individual may be identified one at a time to find the relation.
+- The Average disance is the average of the following distances : 
+  * Very Active
+  * Moderately Active
+  * Lightly Active
+- Average Activity minutes is the average of the following:
+  * VeryActiveMinutes 
+  * FairlyActiveMinutes 
+  * LightlyActiveMinutes
+
+## -----------------------------------------------------------------------------------------
+### RELATION BETWEEN THE TOTAL STEPS AND HEARTRATE
+
+```{r echo=FALSE}
+#RELATION BETWEEN STEPS AND HEARTRATE
+  #1  Average Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=TotalSteps,y=AverageHeartRate,color=Id))+
+  labs(title = "Relation b/w Total Steps and Average Heart Rate",caption = "(Graph 12)")
+  #2  Maximum Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=TotalSteps,y=MaxHeartRate,color=Id))+
+  labs(title = "Relation b/w Total Steps and Maximum Heart Rate for each user ", caption = "(Graph 13)")
+  #3  Minimum Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=TotalSteps,y=MinHeartRate,color=Id))+
+  labs(title = "Relation b/w Total Steps and Minimum Heart Rate for each user",caption = "(Graph 14)")
+
+```
+
+#### **CONCLUSION FROM GRAPH 12, GRAPH 13 AND GRAPH 14**
+- Trend for an individual may be identified one at a time to find the relation between steps and heart rate.
+- Also,more detailed data about the heart rate is needed to understand the trend
+
+## -----------------------------------------------------------------------------------------
+### RELATION BETWEEN THE AVERAGE ACTIVITY MINUTES AND HEARTRATE
+
+
+```{r echo=FALSE}
+
+#RELATION BETWEEN AVERAGE ACTIVITY MINUTES AND HEARTRATE
+  #1  Average Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=AvgActiveMin,y=AverageHeartRate,color=Id))+
+labs(title = "Relation b/w Average Activity Minutes and Average Heart Rate for each user",caption = "(Graph 15)")
+  #2  Maximum Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=AvgActiveMin,y=MaxHeartRate,color=Id))+
+labs(title = "Relation b/w Average Activity Minutes and Maximum Heart Rate for each user",caption = "(Graph 16)")
+  #3  Minimum Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=AvgActiveMin,y=MinHeartRate,color=Id))+
+labs(title = "Relation b/w Average Activity Minutes and Minimum Heart Rate for each user",caption = "(Graph 17)")
+
+```
+
+
+#### **CONCLUSION FROM GRAPH 15, GRAPH 16 AND GRAPH 17**
+- To understand the relation between the heart rate and activity minutes the minimum and maximum heartrate at the time of activity should be studied.
+
+## -----------------------------------------------------------------------------------------
+### RELATION BETWEEN THE CALORIES AND HEARTRATE
+
+```{r echo=FALSE}
+
+#RELATION BETWEEN CALORIES AND HEARTRATE
+#1  Average Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=Calories,y=AverageHeartRate,color=Id))+
+labs(title = "Relation b/w Calories and Average Heart Rate for each user",caption = "(Graph 18)")
+
+#2  Maximum Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=Calories,y=MaxHeartRate,color=Id))+
+  labs(title = "Relation b/w Calories and Maximum Heart Rate for each user",caption = "(Graph 19)")
+
+#3  Minimum Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=Calories,y=MinHeartRate,color=Id))+
+  labs(title = "Relation b/w Calories and Minimum Heart Rate for each user",caption = "(Graph 20)")
+
+```
+
+#### **CONCLUSION FROM GRAPH 18, GRAPH 19 AND GRAPH 20**
+- The relation between calories and heart rate seem to linear.
+- More calories are burnt when heart rate increases.
+
+## -----------------------------------------------------------------------------------------
+### RELATION BETWEEN THE SLEEP AND HEARTRATE
+
+```{r echo=FALSE}
+
+#RELATION BETWEEN SLEEP AND HEARTRATE
+#1  Average Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=TotalMinutesAsleep,y=AverageHeartRate,color=Id))+
+  labs(title = "Relation b/w Total Sleep minutes and Average Heart Rate for each user",caption = "(Graph 21)")
+
+#2  Maximum Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=TotalMinutesAsleep,y=MaxHeartRate,color=Id))+
+  labs(title = "Relation b/w Total Sleep minutes and Maximum Heart Rate for each user",caption = "(Graph 22)")
+
+#3  Minimum Heart Rate
+ggplot(MergeActivitySleepHeartRate)+
+  geom_point(mapping = aes(x=TotalMinutesAsleep,y=MinHeartRate,color=Id))+
+labs(title = "Relation b/w Total Sleep minutes and Minimum Heart Rate for each user",caption = "(Graph 23)")
+```
+
+#### **CONCLUSION FROM GRAPH 21, GRAPH 22 AND GRAPH 23**
+- More detailed data is needed about heartrate.
+
+## -----------------------------------------------------------------------------------------
+### RELATION BETWEEN THE INDIVIDUAL'S AVERAGE HEARTRATE AND WEIGHT
+
+
+```{r echo=FALSE}
+#RELATION BETWEEN AVERAGE HEARTRATE AND WEIGHT
+ggplot(MergeActivitySleepHeartRateWeight)+
+  geom_point(mapping = aes(x=WeightKg,y=AverageHeartRate,color=Id))+
+  labs(title = "Relation b/w Weight in kg and Average Heart Rate for each user",caption = "(Graph 24)")
+```
+
+#### **CONCLUSION FROM GRAPH 24**
+- More detailed data is needed about both heartrate and weight.
+
+
+## -----------------------------------------------------------------------------------------
+### RELATION BETWEEN THE SLEEP AND WEIGHT
+
+```{r echo=FALSE}
+#RELATION BETWEEN SLEEP AND WEIGHT
+ggplot(MergeActivitySleepHeartRateWeight)+
+  geom_point(mapping = aes(x=WeightKg,y=TotalMinutesAsleep,color=Id))+
+  labs(title = "Relation b/w Weight in kg and Total Minutes Asleep for each user",caption = "(Graph 25)")
+```
+
+
+#### **CONCLUSION FROM GRAPH 25**
+- More detailed data is needed about weight.
+
+
+## -----------------------------------------------------------------------------------------
+### RELATION BETWEEN THE SLEEP AND BMI
+
+```{r echo=FALSE}
+#RELATION BETWEEN SLEEP AND BMI
+ggplot(MergeActivitySleepHeartRateWeight)+
+  geom_point(mapping = aes(x=BMI,y=TotalMinutesAsleep,color=Id))+
+  labs(title = "Relation b/w BMI and Total Minutes Asleep for each user",caption = "(Graph 26)")
+
+#==========================================================================================
+```
+
+#### **CONCLUSION FROM GRAPH 26**
+- More detailed data is needed about weight.
+
+## -----------------------------------------------------------------------------------------
+
+#### **RECOMMENDATIONS**
+- Heart rate details are logged for only few users. More details could be collected to understand the trend.
+- Weight data is also limited. Features could be added to track Fat and body measurements on the smart device itself.
+- Logging weight with selection on smart device itself could be easy for users to make manual entry rather than going into the application.
+- Features to track water intake easily with just one press on device could be added
+
+## -----------------------------------------------------------------------------------------
+## =======================================================================
